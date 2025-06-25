@@ -7,18 +7,48 @@ const defaultQuotes = [
     { text: "The mind is everything. What you think you become.", category: "Mindset" }
 ];
 
-// Global array to store quote objects
+// Global array to store client-side quote objects (local data)
 let quotes = [];
 
-// Get the DOM element where quotes will be displayed.
+// Simulated server-side data
+// In a real application, this would be fetched from an actual backend API
+let serverQuotes = [];
+
+// Configuration for syncing
+const SYNC_INTERVAL_MS = 15000; // Sync every 15 seconds
+const NOTIFICATION_TIMEOUT_MS = 3000; // Notifications disappear after 3 seconds
+
+// Get DOM elements
 const quoteDisplay = document.getElementById('quoteDisplay');
-// Get the button to show a new quote.
 const newQuoteButton = document.getElementById('newQuote');
-// Get input fields for adding new quotes.
 const newQuoteTextInput = document.getElementById('newQuoteText');
 const newQuoteCategoryInput = document.getElementById('newQuoteCategory');
-// Get the category filter dropdown.
 const categoryFilter = document.getElementById('categoryFilter');
+const syncButton = document.getElementById('syncButton');
+const notificationArea = document.getElementById('notificationArea');
+
+// --- Notification System ---
+
+/**
+ * Displays a temporary notification message to the user.
+ * @param {string} message - The message to display.
+ * @param {string} type - The type of notification ('success', 'error', 'info').
+ */
+let notificationTimeout; // To clear previous timeouts
+function displayNotification(message, type = 'info') {
+    // Clear any existing timeout to allow new notifications to display fully
+    clearTimeout(notificationTimeout);
+
+    notificationArea.textContent = message;
+    notificationArea.className = 'notification-area show'; // Reset classes and show
+    notificationArea.classList.add(type);
+
+    // Set a timeout to hide the notification after a few seconds
+    notificationTimeout = setTimeout(() => {
+        notificationArea.classList.remove('show');
+    }, NOTIFICATION_TIMEOUT_MS);
+}
+
 
 // --- Web Storage Functions ---
 
@@ -41,6 +71,7 @@ function loadQuotes() {
         }
     } catch (e) {
         console.error("Error loading quotes from local storage:", e);
+        displayNotification("Error loading local data. Using default quotes.", "error");
         // Fallback to default quotes if there's an issue with local storage
         quotes = [...defaultQuotes];
     }
@@ -56,6 +87,7 @@ function saveQuotes() {
         localStorage.setItem('quotes', JSON.stringify(quotes));
     } catch (e) {
         console.error("Error saving quotes to local storage:", e);
+        displayNotification("Error saving data locally.", "error");
     }
 }
 
@@ -111,6 +143,94 @@ function loadLastSelectedCategory() {
     }
 }
 
+// --- Simulated Server Interaction ---
+
+/**
+ * Initializes the simulated server quotes with a copy of the default client quotes.
+ * This function should ideally be called only once on application load or initial setup.
+ */
+function initializeServerQuotes() {
+    // Deep copy default quotes to simulate initial server state
+    serverQuotes = JSON.parse(JSON.stringify(defaultQuotes));
+    console.log("Simulated server initialized with:", serverQuotes);
+}
+
+/**
+ * Simulates fetching quotes from a server.
+ * In a real application, this would be an `await fetch('/api/quotes')` call.
+ * @returns {Promise<Array<Object>>} A promise that resolves with the server's quotes.
+ */
+async function fetchQuotesFromServer() {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    console.log("Simulated server fetch:", serverQuotes);
+    // Return a deep copy to prevent direct modification of serverQuotes from client
+    return JSON.parse(JSON.stringify(serverQuotes));
+}
+
+/**
+ * Simulates pushing quotes to a server.
+ * In a real application, this would be an `await fetch('/api/quotes', { method: 'POST', body: JSON.stringify(quotes) })` call.
+ * This function updates the simulated server data with the client's current 'quotes' array.
+ * @param {Array<Object>} clientQuotes - The current quotes from the client to be sent to the server.
+ * @returns {Promise<void>} A promise that resolves when the push is complete.
+ */
+async function pushQuotesToServer(clientQuotes) {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Overwrite server data with client data (server takes client's current state)
+    serverQuotes = JSON.parse(JSON.stringify(clientQuotes));
+    console.log("Simulated server updated with client data:", serverQuotes);
+}
+
+// --- Data Syncing and Conflict Resolution ---
+
+/**
+ * Performs a data synchronization between the client's local quotes and the simulated server.
+ * Conflict Resolution Strategy: Server's additions take precedence. Client's current state then updates the server.
+ */
+async function syncQuotes() {
+    displayNotification("Syncing data...", "info");
+    try {
+        const remoteQuotes = await fetchQuotesFromServer();
+        let changesDetected = false;
+
+        // Step 1: Merge server's unique quotes into local data
+        remoteQuotes.forEach(serverQuote => {
+            // Check if this server quote already exists in our local array (by text and category)
+            const existsLocally = quotes.some(localQuote =>
+                localQuote.text === serverQuote.text && localQuote.category === serverQuote.category
+            );
+
+            if (!existsLocally) {
+                quotes.push(serverQuote);
+                changesDetected = true;
+                console.log("Added new quote from server:", serverQuote);
+            }
+        });
+
+        // Step 2: Push current client data to server (simulated)
+        // This effectively makes the client's current state the new server state.
+        // This is where "server data takes precedence" is handled: if a server quote was
+        // new, it's now in 'quotes'. Then 'quotes' (with server additions) is pushed back.
+        await pushQuotesToServer(quotes);
+
+        if (changesDetected) {
+            saveQuotes(); // Save the merged local quotes
+            populateCategories(); // Update categories if new ones were added
+            showRandomQuote(); // Refresh the display
+            displayNotification("Data synced successfully! New quotes added from server.", "success");
+        } else {
+            displayNotification("Data synced. No new quotes from server.", "success");
+        }
+
+    } catch (error) {
+        console.error("Error during sync:", error);
+        displayNotification("Sync failed. Please try again later.", "error");
+    }
+}
+
+
 // --- DOM Manipulation and Logic Functions ---
 
 /**
@@ -118,17 +238,9 @@ function loadLastSelectedCategory() {
  * It considers the currently selected category filter.
  * If the filtered quotes array is empty, it displays a message indicating no quotes are available.
  * It also saves the index of the displayed quote to session storage.
- *
- * This function demonstrates:
- * - Clearing existing DOM content (`innerHTML = ''`).
- * - Creating new DOM elements (`document.createElement`).
- * - Adding CSS classes to elements (`element.classList.add`).
- * - Setting text content (`element.textContent`).
- * - Appending child elements (`parentElement.appendChild`).
  */
 function showRandomQuote() {
-    // Clear any existing content in the quote display area to avoid multiple quotes piling up.
-    quoteDisplay.innerHTML = '';
+    quoteDisplay.innerHTML = ''; // Clear existing content
 
     const selectedCategory = categoryFilter.value;
     let quotesToDisplay = [];
@@ -140,22 +252,16 @@ function showRandomQuote() {
         quotesToDisplay = quotes.filter(quote => quote.category === selectedCategory);
     }
 
-    // Check if there are any quotes available after filtering.
     if (quotesToDisplay.length === 0) {
         const noQuotesMessage = document.createElement('p');
         noQuotesMessage.textContent = "No quotes available for this category. Try a different filter or add new quotes!";
         noQuotesMessage.classList.add('text-gray-500', 'italic', 'text-lg', 'text-center');
         quoteDisplay.appendChild(noQuotesMessage);
         saveLastViewedQuoteIndex(-1); // Indicate no quote viewed
-        return; // Exit the function if no quotes are present.
+        return;
     }
 
     let randomIndex;
-    // Try to load the last viewed quote index from session storage for *all* quotes.
-    // Note: The session storage remembers the index in the full 'quotes' array.
-    // If we're filtering, this might not directly apply to the 'quotesToDisplay' array.
-    // For simplicity with filtering, we'll just pick a random one from the filtered set
-    // and only use the 'lastViewedQuoteIndex' if 'all' categories are selected.
     if (selectedCategory === 'all') {
         const lastIndex = loadLastViewedQuoteIndex();
         if (lastIndex !== null && lastIndex >= 0 && lastIndex < quotes.length) {
@@ -167,52 +273,40 @@ function showRandomQuote() {
         randomIndex = Math.floor(Math.random() * quotesToDisplay.length);
     }
 
-
     const selectedQuote = quotesToDisplay[randomIndex];
 
-    // If 'all' categories are selected, save the index from the original 'quotes' array.
-    // Otherwise, we don't store the index, as it's within a temporary filtered array.
     if (selectedCategory === 'all') {
-        const originalIndex = quotes.indexOf(selectedQuote); // Find the index in the original array
+        const originalIndex = quotes.indexOf(selectedQuote);
         if (originalIndex !== -1) {
             saveLastViewedQuoteIndex(originalIndex);
         }
     } else {
-        // Clear session storage for last viewed quote if filtering is active,
-        // as the index won't be consistent across filter changes.
         sessionStorage.removeItem('lastViewedQuoteIndex');
     }
 
-
-    // Create a container div for the quote.
     const quoteContainer = document.createElement('div');
     quoteContainer.classList.add(
-        'quote-container', // Custom class for styling
-        'w-full', 'max-w-xl', 'p-6', 'bg-white', 'rounded-xl', 'shadow-lg', // Tailwind classes
+        'quote-container',
+        'w-full', 'max-w-xl', 'p-6', 'bg-white', 'rounded-xl', 'shadow-lg',
         'flex', 'flex-col', 'items-center', 'justify-center', 'text-center'
     );
 
-    // Create a paragraph element for the quote text.
     const quoteText = document.createElement('p');
-    quoteText.textContent = `"${selectedQuote.text}"`; // Add quotation marks.
+    quoteText.textContent = `"${selectedQuote.text}"`;
     quoteText.classList.add(
-        'quote-text', // Custom class for styling
-        'text-2xl', 'font-medium', 'text-gray-800', 'mb-4', 'leading-relaxed' // Tailwind classes
+        'quote-text',
+        'text-2xl', 'font-medium', 'text-gray-800', 'mb-4', 'leading-relaxed'
     );
 
-    // Create a paragraph element for the quote category.
     const quoteCategory = document.createElement('p');
-    quoteCategory.textContent = `- ${selectedQuote.category}`; // Prefix with a hyphen.
+    quoteCategory.textContent = `- ${selectedQuote.category}`;
     quoteCategory.classList.add(
-        'quote-category', // Custom class for styling
-        'text-lg', 'text-gray-600', 'italic' // Tailwind classes
+        'quote-category',
+        'text-lg', 'text-gray-600', 'italic'
     );
 
-    // Append the quote text and category to the quote container.
     quoteContainer.appendChild(quoteText);
     quoteContainer.appendChild(quoteCategory);
-
-    // Append the complete quote container to the display area.
     quoteDisplay.appendChild(quoteContainer);
 }
 
@@ -221,15 +315,12 @@ function showRandomQuote() {
  * It also sets the selected option based on the last saved filter preference.
  */
 function populateCategories() {
-    // Get unique categories from the quotes array
     const categories = new Set(quotes.map(quote => quote.category));
 
-    // Clear existing options in the dropdown, but preserve the first "All Categories" option
     while (categoryFilter.children.length > 1) {
         categoryFilter.removeChild(categoryFilter.lastChild);
     }
 
-    // Add each unique category as an option
     categories.forEach(category => {
         const option = document.createElement('option');
         option.value = category;
@@ -237,12 +328,10 @@ function populateCategories() {
         categoryFilter.appendChild(option);
     });
 
-    // Restore the last selected category filter from local storage
     const lastSelectedCategory = loadLastSelectedCategory();
-    if (lastSelectedCategory && categories.has(lastSelectedCategory) || lastSelectedCategory === 'all') {
+    if (lastSelectedCategory && (categories.has(lastSelectedCategory) || lastSelectedCategory === 'all')) {
         categoryFilter.value = lastSelectedCategory;
     } else {
-        // Default to 'all' if the last selected category is no longer available or not set
         categoryFilter.value = 'all';
     }
 }
@@ -254,98 +343,83 @@ function populateCategories() {
  */
 function filterQuotes() {
     const selectedCategory = categoryFilter.value;
-    saveLastSelectedCategory(selectedCategory); // Persist the selected filter
-    showRandomQuote(); // Display a new random quote based on the applied filter
+    saveLastSelectedCategory(selectedCategory);
+    showRandomQuote();
 }
 
 /**
  * Handles the logic for adding a new quote to the 'quotes' array based on user input.
- * It validates the input fields, adds the new quote, clears the input fields,
- * and updates the displayed quote. It also saves the updated quotes to local storage
- * and repopulates the categories dropdown in case a new category was introduced.
+ * It also triggers a sync after adding a quote.
  */
-function createAddQuoteForm() {
-    // Get the trimmed values from the input fields.
+async function createAddQuoteForm() {
     const text = newQuoteTextInput.value.trim();
     const category = newQuoteCategoryInput.value.trim();
 
-    // Perform basic validation to ensure both fields are not empty.
     if (text === '' || category === '') {
-        console.error("Both quote text and category are required!");
-        alert("Please enter both a quote and a category.");
-        return; // Stop the function if validation fails.
+        displayNotification("Both quote text and category are required!", "error");
+        return;
     }
 
-    // Create a new quote object.
     const newQuote = { text: text, category: category };
-    // Add the new quote to the 'quotes' array.
     quotes.push(newQuote);
 
-    // Save the updated quotes array to local storage.
     saveQuotes();
-    // Re-populate categories in case a new category was added
     populateCategories();
 
-    // Clear the input fields after adding the quote for a better user experience.
     newQuoteTextInput.value = '';
     newQuoteCategoryInput.value = '';
 
-    // Log the updated quotes array to the console for debugging purposes.
-    console.log("Quotes updated:", quotes);
+    console.log("Quotes updated locally:", quotes);
+    displayNotification("Quote added locally. Syncing...", "info");
 
-    // Immediately show a random quote, which might be the newly added one.
-    showRandomQuote();
+    // Trigger a sync after adding a quote
+    await syncQuotes();
+    showRandomQuote(); // Show random quote after sync completes and updates
 }
 
 // --- JSON Import/Export Functions ---
 
 /**
  * Exports the current 'quotes' array to a JSON file and triggers a download.
- * Uses Blob and URL.createObjectURL to create a downloadable link dynamically.
  */
 function exportToJsonFile() {
     try {
-        const json = JSON.stringify(quotes, null, 2); // Pretty print JSON
+        const json = JSON.stringify(quotes, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
         a.download = 'quotes.json';
-        document.body.appendChild(a); // Append to body to make it clickable
-        a.click(); // Programmatically click the link to trigger download
-        document.body.removeChild(a); // Remove the link after download initiated
-        URL.revokeObjectURL(url); // Clean up the object URL
-        alert('Quotes exported successfully as quotes.json!');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        displayNotification('Quotes exported successfully as quotes.json!', "success");
     } catch (e) {
         console.error("Error exporting quotes to JSON:", e);
-        alert("Failed to export quotes. Please try again.");
+        displayNotification("Failed to export quotes. Please try again.", "error");
     }
 }
 
 /**
  * Imports quotes from a selected JSON file.
- * This function is triggered by the 'onchange' event of the file input.
- * It reads the file, parses the JSON content, merges it with existing quotes,
- * saves to local storage, and updates the display.
+ * This function also triggers a sync after importing.
  * @param {Event} event - The change event from the file input.
  */
-function importFromJsonFile(event) {
+async function importFromJsonFile(event) {
     const file = event.target.files[0];
     if (!file) {
-        return; // No file selected
+        return;
     }
 
     const fileReader = new FileReader();
-    fileReader.onload = function(e) {
+    fileReader.onload = async function(e) {
         try {
             const importedQuotes = JSON.parse(e.target.result);
 
-            // Basic validation to ensure imported data is an array of objects
             if (Array.isArray(importedQuotes) && importedQuotes.every(q => typeof q === 'object' && q !== null && 'text' in q && 'category' in q)) {
-                // Add new quotes, avoiding exact duplicates if they already exist
                 importedQuotes.forEach(newQuote => {
-                    // Check if a quote with the same text and category already exists
                     const exists = quotes.some(existingQuote =>
                         existingQuote.text === newQuote.text && existingQuote.category === newQuote.category
                     );
@@ -354,34 +428,42 @@ function importFromJsonFile(event) {
                     }
                 });
 
-                saveQuotes(); // Save updated quotes to local storage
-                populateCategories(); // Update categories dropdown with potentially new categories
-                alert('Quotes imported successfully!');
-                showRandomQuote(); // Update the display with potentially new quotes
+                saveQuotes();
+                populateCategories();
+                displayNotification('Quotes imported successfully! Syncing...', "success");
+                await syncQuotes(); // Sync after import
+                showRandomQuote();
             } else {
-                alert('Invalid JSON file format. Please upload a file with an array of quote objects, each having "text" and "category" properties.');
+                displayNotification('Invalid JSON file format. Expected array of objects with "text" and "category".', "error");
             }
         } catch (error) {
             console.error("Error parsing JSON or importing quotes:", error);
-            alert('Failed to import quotes. Please ensure the file is a valid JSON format.');
+            displayNotification('Failed to import quotes. Please ensure the file is a valid JSON format.', "error");
         }
     };
     fileReader.onerror = function(e) {
         console.error("FileReader error:", e);
-        alert('Error reading file. Please try again.');
+        displayNotification('Error reading file. Please try again.', "error");
     };
     fileReader.readAsText(file);
 }
 
 // --- Event Listeners and Initialization ---
 
-// Add an event listener to the "Show New Quote" button.
-// When clicked, the showRandomQuote function will be executed.
 newQuoteButton.addEventListener('click', showRandomQuote);
+syncButton.addEventListener('click', syncQuotes); // Manual sync button
 
 // Initial setup when the page loads:
-window.onload = function() {
+window.onload = async function() {
+    initializeServerQuotes(); // Set up the simulated server data
     loadQuotes(); // Load quotes from local storage
-    populateCategories(); // Populate the category filter dropdown
+
+    // Perform an initial sync to get server data and push any local changes
+    await syncQuotes();
+
+    populateCategories(); // Populate the category filter dropdown based on synced data
     filterQuotes(); // Apply the last saved filter and display a quote
+
+    // Set up periodic background sync
+    setInterval(syncQuotes, SYNC_INTERVAL_MS);
 };
