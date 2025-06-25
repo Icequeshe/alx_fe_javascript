@@ -76,9 +76,11 @@ function showRandomQuote() {
 }
 
 /**
- * Adds a new quote to the 'quotes' array based on user input from the form.
- * It validates the input fields to ensure they are not empty before adding.
- * After adding, it clears the input fields and displays a new random quote.
+ * Handles the logic for adding a new quote to the 'quotes' array based on user input.
+ * This function was previously named 'addQuote' and has been renamed to 'createAddQuoteForm'
+ * as per the project requirements to ensure the function name matches.
+ * It validates the input fields, adds the new quote, clears the input fields,
+ * and updates the displayed quote.
  *
  * This function demonstrates:
  * - Accessing input values (`inputElement.value`).
@@ -87,7 +89,7 @@ function showRandomQuote() {
  * - Clearing input fields.
  * - Re-rendering dynamic content by calling `showRandomQuote()`.
  */
-function addQuote() {
+function createAddQuoteForm() {
     // Get the trimmed values from the input fields.
     const text = newQuoteTextInput.value.trim();
     const category = newQuoteCategoryInput.value.trim();
