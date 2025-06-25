@@ -1,29 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dynamic Quote Generator</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Quote Generator</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for a cleaner look and better readability */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        #quoteDisplay {
+            min-height: 100px; /* Ensure space even when empty */
+        }
+        /* Style for the quote container */
+        .quote-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .quote-text {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: #34495e;
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+        .quote-category {
+            font-size: 1rem;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        /* Styles for input fields and buttons */
+        input[type="text"] {
+            border: 1px solid #dcdcdc;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            color: #333;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 1rem;
+        }
+        button:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        /* Form container styling */
+        .add-quote-form {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            margin-top: 2rem;
+        }
+    </style>
 </head>
-<body>
-  <h1>Dynamic Quote Generator</h1>
+<body class="flex flex-col items-center p-5 bg-gray-100 min-h-screen">
+    <h1 class="text-4xl font-bold text-gray-800 mb-8">Dynamic Quote Generator</h1>
 
-  <div>
-    <label for="categorySelect">Select Category:</label>
-    <select id="categorySelect"></select>
-  </div>
+    <!-- Quote Display Section -->
+    <div id="quoteDisplay" class="flex flex-col items-center justify-center w-full max-w-xl p-6 bg-white rounded-xl shadow-lg mb-8 min-h-[120px]">
+        <!-- Dynamic content will be inserted here by JavaScript -->
+        <p class="text-gray-500 italic">Click "Show New Quote" to see a quote!</p>
+    </div>
 
-  <div id="quoteDisplay" style="margin: 20px 0; font-size: 1.2em;"></div>
+    <!-- Button to show a new quote -->
+    <button id="newQuote" class="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 transition-colors duration-300 transform hover:-translate-y-1">
+        Show New Quote
+    </button>
 
-  <button id="newQuote">Show New Quote</button>
+    <!-- Section for adding new quotes -->
+    <div class="add-quote-form w-full max-w-xl p-6 bg-white rounded-xl shadow-lg mt-10">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-5 text-center">Add a New Quote</h2>
+        <div class="flex flex-col space-y-4">
+            <input id="newQuoteText" type="text" placeholder="Enter a new quote" class="px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" />
+            <input id="newQuoteCategory" type="text" placeholder="Enter quote category" class="px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-all duration-200" />
+            <button onclick="addQuote()" class="px-6 py-3 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 transition-colors duration-300 transform hover:-translate-y-1">
+                Add Quote
+            </button>
+        </div>
+    </div>
 
-  <h2>Add New Quote</h2>
-  <div>
-    <input id="newQuoteText" type="text" placeholder="Enter a new quote" />
-    <input id="newQuoteCategory" type="text" placeholder="Enter quote category" />
-    <button id="addQuoteButton">Add Quote</button>
-  </div>
-
-  <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
