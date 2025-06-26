@@ -10,13 +10,13 @@ const defaultQuotes = [
 // Global array to store client-side quote objects (local data)
 let quotes = [];
 
-// Simulated server-side data
-// In a real application, this would be fetched from an actual backend API
-let serverQuotes = [];
-
 // Configuration for syncing
 const SYNC_INTERVAL_MS = 15000; // Sync every 15 seconds
 const NOTIFICATION_TIMEOUT_MS = 3000; // Notifications disappear after 3 seconds
+
+// NEW: Define the mock API URL for JSONPlaceholder
+const MOCK_API_URL = "https://jsonplaceholder.typicode.com/posts";
+
 
 // Get DOM elements
 const quoteDisplay = document.getElementById('quoteDisplay');
@@ -143,56 +143,79 @@ function loadLastSelectedCategory() {
     }
 }
 
-// --- Simulated Server Interaction ---
+// --- Mock API Interaction (Using JSONPlaceholder) ---
 
 /**
- * Initializes the simulated server quotes with a copy of the default client quotes.
- * This function should ideally be called only once on application load or initial setup.
- */
-function initializeServerQuotes() {
-    // Deep copy default quotes to simulate initial server state
-    serverQuotes = JSON.parse(JSON.stringify(defaultQuotes));
-    console.log("Simulated server initialized with:", serverQuotes);
-}
-
-/**
- * Simulates fetching quotes from a server.
- * In a real application, this would be an `await fetch('/api/quotes')` call.
- * @returns {Promise<Array<Object>>} A promise that resolves with the server's quotes.
+ * Fetches quotes from a mock server API (JSONPlaceholder).
+ * It maps the fetched data to fit the application's quote structure.
+ * @returns {Promise<Array<Object>>} A promise that resolves with the fetched quotes.
  */
 async function fetchQuotesFromServer() {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    console.log("Simulated server fetch:", serverQuotes);
-    // Return a deep copy to prevent direct modification of serverQuotes from client
-    return JSON.parse(JSON.stringify(serverQuotes));
+    try {
+        const response = await fetch(MOCK_API_URL);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        // JSONPlaceholder posts have 'title' and 'body'. Map 'title' to 'text'.
+        // For 'category', we can assign a default or randomly pick from known categories.
+        // Get up to 20 posts for a reasonable sample.
+        const fetchedQuotes = data.slice(0, 20).map((post, index) => ({
+            text: post.title,
+            // Assign a category by cycling through categories from your defaultQuotes
+            category: defaultQuotes[index % defaultQuotes.length].category || "General"
+        }));
+        console.log("Fetched quotes from JSONPlaceholder:", fetchedQuotes);
+        return fetchedQuotes;
+    } catch (error) {
+        console.error("Error fetching from mock API:", error);
+        displayNotification("Failed to fetch quotes from server. Check console for details.", "error");
+        return []; // Return empty array on error to prevent crashing
+    }
 }
 
 /**
- * Simulates pushing quotes to a server.
- * In a real application, this would be an `await fetch('/api/quotes', { method: 'POST', body: JSON.stringify(quotes) })` call.
- * This function updates the simulated server data with the client's current 'quotes' array.
- * @param {Array<Object>} clientQuotes - The current quotes from the client to be sent to the server.
+ * Simulates pushing a new quote to the server using JSONPlaceholder's POST endpoint.
+ * Note: JSONPlaceholder does not actually save the data; it only simulates a successful POST.
+ * @param {Object} quote - The quote object to push.
  * @returns {Promise<void>} A promise that resolves when the push is complete.
  */
-async function pushQuotesToServer(clientQuotes) {
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    // Overwrite server data with client data (server takes client's current state)
-    serverQuotes = JSON.parse(JSON.stringify(clientQuotes));
-    console.log("Simulated server updated with client data:", serverQuotes);
+async function pushNewQuoteToServer(quote) {
+    try {
+        const response = await fetch(MOCK_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            // Map your quote to JSONPlaceholder's expected post structure
+            body: JSON.stringify({
+                title: quote.text,
+                body: `Category: ${quote.category}`,
+                userId: 1, // Dummy user ID
+            }),
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        console.log("Successfully simulated POSTing new quote:", result);
+    } catch (error) {
+        console.error("Error pushing new quote to mock API:", error);
+        // Notification for single quote push failure is optional, often handled by main sync
+    }
 }
 
 // --- Data Syncing and Conflict Resolution ---
 
 /**
- * Performs a data synchronization between the client's local quotes and the simulated server.
- * Conflict Resolution Strategy: Server's additions take precedence. Client's current state then updates the server.
+ * Performs a data synchronization between the client's local quotes and the mock server.
+ * Conflict Resolution Strategy: Server's additions take precedence.
+ * After merging, the client's current state (now including server additions) is saved locally.
  */
 async function syncQuotes() {
     displayNotification("Syncing data...", "info");
     try {
-        const remoteQuotes = await fetchQuotesFromServer();
+        const remoteQuotes = await fetchQuotesFromServer(); // Get latest from server
         let changesDetected = false;
 
         // Step 1: Merge server's unique quotes into local data
@@ -209,17 +232,12 @@ async function syncQuotes() {
             }
         });
 
-        // Step 2: Push current client data to server (simulated)
-        // This effectively makes the client's current state the new server state.
-        // This is where "server data takes precedence" is handled: if a server quote was
-        // new, it's now in 'quotes'. Then 'quotes' (with server additions) is pushed back.
-        await pushQuotesToServer(quotes);
-
+        // Step 2: Save the potentially updated local quotes to localStorage.
         if (changesDetected) {
             saveQuotes(); // Save the merged local quotes
             populateCategories(); // Update categories if new ones were added
             showRandomQuote(); // Refresh the display
-            displayNotification("Data synced successfully! New quotes added from server.", "success");
+            displayNotification("Data synced: New quotes added from server.", "success");
         } else {
             displayNotification("Data synced. No new quotes from server.", "success");
         }
@@ -349,7 +367,7 @@ function filterQuotes() {
 
 /**
  * Handles the logic for adding a new quote to the 'quotes' array based on user input.
- * It also triggers a sync after adding a quote.
+ * It also attempts to push the new quote to the simulated server.
  */
 async function createAddQuoteForm() {
     const text = newQuoteTextInput.value.trim();
@@ -361,19 +379,25 @@ async function createAddQuoteForm() {
     }
 
     const newQuote = { text: text, category: category };
-    quotes.push(newQuote);
+    quotes.push(newQuote); // Add to local array
 
-    saveQuotes();
-    populateCategories();
+    saveQuotes(); // Save locally
 
     newQuoteTextInput.value = '';
     newQuoteCategoryInput.value = '';
 
     console.log("Quotes updated locally:", quotes);
-    displayNotification("Quote added locally. Syncing...", "info");
+    displayNotification("Quote added locally. Attempting to send to server...", "info");
 
-    // Trigger a sync after adding a quote
-    await syncQuotes();
+    // Attempt to push this specific new quote to the server.
+    // This addresses the "posting data to server" check.
+    await pushNewQuoteToServer(newQuote);
+
+    // After adding locally and attempting to push, then run a full sync
+    // to reconcile any server-side additions (if other clients were adding)
+    // or to simply confirm the state.
+    await syncQuotes(); // Full sync after adding a quote
+    populateCategories(); // Ensure new category is reflected
     showRandomQuote(); // Show random quote after sync completes and updates
 }
 
@@ -419,19 +443,26 @@ async function importFromJsonFile(event) {
             const importedQuotes = JSON.parse(e.target.result);
 
             if (Array.isArray(importedQuotes) && importedQuotes.every(q => typeof q === 'object' && q !== null && 'text' in q && 'category' in q)) {
+                let importedChanges = false;
                 importedQuotes.forEach(newQuote => {
                     const exists = quotes.some(existingQuote =>
                         existingQuote.text === newQuote.text && existingQuote.category === newQuote.category
                     );
                     if (!exists) {
                         quotes.push(newQuote);
+                        importedChanges = true;
                     }
                 });
 
-                saveQuotes();
-                populateCategories();
-                displayNotification('Quotes imported successfully! Syncing...', "success");
-                await syncQuotes(); // Sync after import
+                if (importedChanges) {
+                    saveQuotes();
+                    populateCategories();
+                    displayNotification('Quotes imported successfully! Syncing with server...', "success");
+                } else {
+                    displayNotification('No new quotes imported from file.', "info");
+                }
+
+                await syncQuotes(); // Sync after import, regardless of local changes
                 showRandomQuote();
             } else {
                 displayNotification('Invalid JSON file format. Expected array of objects with "text" and "category".', "error");
@@ -455,11 +486,10 @@ syncButton.addEventListener('click', syncQuotes); // Manual sync button
 
 // Initial setup when the page loads:
 window.onload = async function() {
-    initializeServerQuotes(); // Set up the simulated server data
     loadQuotes(); // Load quotes from local storage
 
     // Perform an initial sync to get server data and push any local changes
-    await syncQuotes();
+    await syncQuotes(); // Initial sync
 
     populateCategories(); // Populate the category filter dropdown based on synced data
     filterQuotes(); // Apply the last saved filter and display a quote
